@@ -10,8 +10,8 @@ require (
 	github.com/Azure/azure-sdk-for-go v53.4.0+incompatible // indirect
 	github.com/Azure/go-amqp v0.13.6 // indirect
 	github.com/fluxcd/notification-controller/api v0.15.0
-	github.com/fluxcd/pkg/apis/meta v0.10.0
-	github.com/fluxcd/pkg/runtime v0.12.0
+	github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1
+	github.com/fluxcd/pkg/runtime v0.13.0-rc.2
 	github.com/getsentry/sentry-go v0.10.0
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-github/v32 v32.1.0
@@ -29,8 +29,8 @@ require (
 	github.com/xanzy/go-gitlab v0.38.2
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
-	k8s.io/api v0.21.1
-	k8s.io/apimachinery v0.21.1
-	k8s.io/client-go v0.21.1
-	sigs.k8s.io/controller-runtime v0.9.0
+	k8s.io/api v0.21.2
+	k8s.io/apimachinery v0.21.2
+	k8s.io/client-go v0.21.2
+	sigs.k8s.io/controller-runtime v0.9.2
 )
