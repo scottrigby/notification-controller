@@ -171,7 +171,6 @@ github.com/evanphx/json-patch v4.11.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQL
 github.com/fasthttp-contrib/websocket v0.0.0-20160511215533-1f3b11f56072/go.mod h1:duJ4Jxv5lDcvg4QuQr0oowTf7dz4/CR8NtyCooz9HL8=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/structs v1.1.0/go.mod h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga6PJ7M=
-github.com/fluxcd/pkg/apis/meta v0.10.0/go.mod h1:CW9X9ijMTpNe7BwnokiUOrLl/h13miwVr/3abEQLbKE=
 github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1 h1:RHHrztAFv9wmjM+Pk7Svt1UdD+1SdnQSp76MWFiM7Hg=
 github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1/go.mod h1:yUblM2vg+X8TE3A2VvJfdhkGmg+uqBlSPkLk7dxi0UM=
 github.com/fluxcd/pkg/runtime v0.13.0-rc.2 h1:+4uTEg+CU++hlr7NpOP4KYp60MtHDOgYvpz/74tbATg=
