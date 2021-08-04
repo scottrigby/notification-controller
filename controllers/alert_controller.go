@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
@@ -71,7 +72,7 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// validate alert spec and provider
 	if err := r.validate(ctx, alert); err != nil {
-		meta.SetResourceCondition(&alert, meta.ReadyCondition, metav1.ConditionFalse, meta.ReconciliationFailedReason, err.Error())
+		conditions.MarkFalse(&alert, meta.ReadyCondition, meta.FailedReason, err.Error())
 		if err := r.patchStatus(ctx, req, alert.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
@@ -79,8 +80,7 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	if !apimeta.IsStatusConditionTrue(alert.Status.Conditions, meta.ReadyCondition) || alert.Status.ObservedGeneration != alert.Generation {
-		meta.SetResourceCondition(&alert, meta.ReadyCondition, metav1.ConditionTrue, v1beta1.InitializedReason, v1beta1.InitializedReason)
-		alert.Status.ObservedGeneration = alert.Generation
+		conditions.MarkTrue(&alert, meta.ReadyCondition, meta.SucceededReason, v1beta1.InitializedReason)
 		if err := r.patchStatus(ctx, req, alert.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
