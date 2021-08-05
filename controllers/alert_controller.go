@@ -74,8 +74,6 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (resu
 	}
 
 	defer func() {
-		conditions.SetSummary(obj, meta.ReadyCondition)
-
 		// Patch the object, ignoring conflicts on the conditions owned by this controller
 		patchOpts := []patch.Option{
 			patch.WithOwnedConditions{
