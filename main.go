@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	helper "github.com/fluxcd/pkg/runtime/controller"
 	prommetrics "github.com/slok/go-http-metrics/metrics/prometheus"
 	"github.com/slok/go-http-metrics/middleware"
 	flag "github.com/spf13/pflag"
@@ -119,6 +120,8 @@ func main() {
 	probes.SetupChecks(mgr, setupLog)
 	pprof.SetupHandlers(mgr, setupLog)
 
+	metricsH := helper.MustMakeMetrics(mgr)
+
 	if err = (&controllers.ProviderReconciler{
 		Client:          mgr.GetClient(),
 		Scheme:          mgr.GetScheme(),
@@ -128,9 +131,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.AlertReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		MetricsRecorder: metricsRecorder,
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Metrics: metricsH,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Alert")
 		os.Exit(1)

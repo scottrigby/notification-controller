@@ -21,19 +21,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
-	"github.com/fluxcd/pkg/runtime/metrics"
+	helper "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -44,15 +41,17 @@ import (
 // AlertReconciler reconciles a Alert object
 type AlertReconciler struct {
 	client.Client
-	Scheme          *runtime.Scheme
-	MetricsRecorder *metrics.Recorder
+	helper.Metrics
+
+	Scheme *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts/status,verbs=get;update;patch
 
 func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
-	reconcileStart := time.Now()
+	start := time.Now()
+	log := ctrl.LoggerFrom(ctx)
 
 	obj := &v1beta1.Alert{}
 	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
@@ -60,15 +59,12 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (resu
 	}
 
 	// record suspension metrics
-	r.recordSuspension(ctx, obj)
+	r.RecordSuspend(ctx, obj, obj.Spec.Suspend)
 
-	// record reconciliation duration
-	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, obj)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
+	// return early if the object is suspended
+	if obj.Spec.Suspend {
+		log.Info("Reconciliation is suspended for this object")
+		return ctrl.Result{}, nil
 	}
 
 	// Initialize the patch helper
@@ -115,7 +111,9 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (resu
 			retErr = errors.NewAggregate([]error{retErr, err})
 		}
 
-		// r.recordReadiness(ctx, obj)
+		// Always record readiness and duration metrics
+		r.Metrics.RecordReadiness(ctx, obj)
+		r.Metrics.RecordDuration(ctx, obj, start)
 	}()
 
 	return r.reconcile(ctx, obj)
@@ -156,44 +154,4 @@ func (r *AlertReconciler) validate(ctx context.Context, alert *v1beta1.Alert) er
 	}
 
 	return nil
-}
-
-func (r *AlertReconciler) recordSuspension(ctx context.Context, alert v1beta1.Alert) {
-	if r.MetricsRecorder == nil {
-		return
-	}
-	log := logr.FromContext(ctx)
-
-	objRef, err := reference.GetReference(r.Scheme, &alert)
-	if err != nil {
-		log.Error(err, "unable to record suspended metric")
-		return
-	}
-
-	if !alert.DeletionTimestamp.IsZero() {
-		r.MetricsRecorder.RecordSuspend(*objRef, false)
-	} else {
-		r.MetricsRecorder.RecordSuspend(*objRef, alert.Spec.Suspend)
-	}
-}
-
-func (r *AlertReconciler) recordReadiness(ctx context.Context, alert v1beta1.Alert) {
-	log := logr.FromContext(ctx)
-	if r.MetricsRecorder == nil {
-		return
-	}
-
-	objRef, err := reference.GetReference(r.Scheme, &alert)
-	if err != nil {
-		log.Error(err, "unable to record readiness metric")
-		return
-	}
-	if rc := apimeta.FindStatusCondition(alert.Status.Conditions, meta.ReadyCondition); rc != nil {
-		r.MetricsRecorder.RecordCondition(*objRef, *rc, !alert.DeletionTimestamp.IsZero())
-	} else {
-		r.MetricsRecorder.RecordCondition(*objRef, metav1.Condition{
-			Type:   meta.ReadyCondition,
-			Status: metav1.ConditionUnknown,
-		}, !alert.DeletionTimestamp.IsZero())
-	}
 }
