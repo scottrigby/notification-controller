@@ -86,7 +86,7 @@ spec:
                 description: Secret reference containing the token used to validate the payload authenticity
                 properties:
                   name:
-                    description: Name of the referent
+                    description: Name of the referent.
                     type: string
                 required:
                 - name
