@@ -34,7 +34,9 @@ import (
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
+	"k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/fluxcd/notification-controller/api/v1beta1"
 )
@@ -49,47 +51,74 @@ type AlertReconciler struct {
 // +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts/status,verbs=get;update;patch
 
-func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	reconcileStart := time.Now()
-	log := logr.FromContext(ctx)
 
-	var alert v1beta1.Alert
-	if err := r.Get(ctx, req.NamespacedName, &alert); err != nil {
+	var obj v1beta1.Alert
+	if err := r.Get(ctx, req.NamespacedName, &obj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// record suspension metrics
-	r.recordSuspension(ctx, alert)
+	r.recordSuspension(ctx, obj)
 
 	// record reconciliation duration
 	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &alert)
+		objRef, err := reference.GetReference(r.Scheme, &obj)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 	}
 
-	// validate alert spec and provider
-	if err := r.validate(ctx, alert); err != nil {
-		conditions.MarkFalse(&alert, meta.ReadyCondition, meta.FailedReason, err.Error())
-		if err := r.patchStatus(ctx, req, alert.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		return ctrl.Result{Requeue: true}, err
+	// Initialize the patch helper
+	patchHelper, err := patch.NewHelper(&obj, r.Client)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
-	if !apimeta.IsStatusConditionTrue(alert.Status.Conditions, meta.ReadyCondition) || alert.Status.ObservedGeneration != alert.Generation {
-		conditions.MarkTrue(&alert, meta.ReadyCondition, meta.SucceededReason, v1beta1.InitializedReason)
-		if err := r.patchStatus(ctx, req, alert.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
+	defer func() {
+		conditions.SetSummary(&obj, meta.ReadyCondition)
+
+		// Patch the object, ignoring conflicts on the conditions owned by this controller
+		patchOpts := []patch.Option{
+			patch.WithOwnedConditions{
+				Conditions: []string{
+					meta.ReadyCondition,
+					meta.ReconcilingCondition,
+					meta.StalledCondition,
+				},
+			},
 		}
-		log.Info("Alert initialised")
-	}
 
-	r.recordReadiness(ctx, alert)
+		// Determine if the resource is still being reconciled, or if it has stalled, and record this observation
+		if retErr == nil && (result.IsZero() || !result.Requeue) {
+			// We are no longer reconciling
+			conditions.Delete(&obj, meta.ReconcilingCondition)
 
-	return ctrl.Result{}, nil
+			// We have now observed this generation
+			patchOpts = append(patchOpts, patch.WithStatusObservedGeneration{})
+
+			readyCondition := conditions.Get(&obj, meta.ReadyCondition)
+			switch readyCondition.Status {
+			case metav1.ConditionFalse:
+				// As we are no longer reconciling and the end-state is not ready, the reconciliation has stalled
+				conditions.MarkStalled(&obj, readyCondition.Reason, readyCondition.Message)
+			case metav1.ConditionTrue:
+				// As we are no longer reconciling and the end-state is ready, the reconciliation is no longer stalled
+				conditions.Delete(&obj, meta.StalledCondition)
+			}
+		}
+
+		// Finally, patch the resource
+		if err := patchHelper.Patch(ctx, &obj, patchOpts...); err != nil {
+			retErr = errors.NewAggregate([]error{retErr, err})
+		}
+
+		r.recordReadiness(ctx, obj)
+	}()
+
+	return r.reconcile(ctx, &obj)
 }
 
 func (r *AlertReconciler) SetupWithManager(mgr ctrl.Manager) error {
