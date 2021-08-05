@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
@@ -71,7 +72,7 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// validate provider spec and credentials
 	if err := r.validate(ctx, provider); err != nil {
-		meta.SetResourceCondition(&provider, meta.ReadyCondition, metav1.ConditionFalse, meta.ReconciliationFailedReason, err.Error())
+		conditions.MarkFalse(&provider, meta.ReadyCondition, meta.FailedReason, err.Error())
 		if err := r.patchStatus(ctx, req, provider.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
@@ -79,7 +80,7 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	if !apimeta.IsStatusConditionTrue(provider.Status.Conditions, meta.ReadyCondition) {
-		meta.SetResourceCondition(&provider, meta.ReadyCondition, metav1.ConditionTrue, v1beta1.InitializedReason, v1beta1.InitializedReason)
+		conditions.MarkTrue(&provider, meta.ReadyCondition, meta.SucceededReason, v1beta1.InitializedReason)
 		if err := r.patchStatus(ctx, req, provider.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
