@@ -151,7 +151,7 @@ func (r *AlertReconciler) validate(ctx context.Context, alert *v1beta1.Alert) er
 		return fmt.Errorf("failed to get provider %s, error: %w", providerName.String(), err)
 	}
 
-	if !apimeta.IsStatusConditionTrue(provider.Status.Conditions, meta.ReadyCondition) {
+	if conditions.Get(&provider, meta.ReadyCondition).Status != metav1.ConditionTrue {
 		return fmt.Errorf("provider %s is not ready", providerName.String())
 	}
 
