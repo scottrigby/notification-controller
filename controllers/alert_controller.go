@@ -197,15 +197,3 @@ func (r *AlertReconciler) recordReadiness(ctx context.Context, alert v1beta1.Ale
 		}, !alert.DeletionTimestamp.IsZero())
 	}
 }
-
-func (r *AlertReconciler) patchStatus(ctx context.Context, req ctrl.Request, newStatus v1beta1.AlertStatus) error {
-	var alert v1beta1.Alert
-	if err := r.Get(ctx, req.NamespacedName, &alert); err != nil {
-		return err
-	}
-
-	patch := client.MergeFrom(alert.DeepCopy())
-	alert.Status = newStatus
-
-	return r.Status().Patch(ctx, &alert, patch)
-}
