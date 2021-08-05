@@ -20,8 +20,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+
 	"k8s.io/client-go/tools/reference"
 
+	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -58,35 +60,33 @@ type ReceiverReconciler struct {
 func (r *ReceiverReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logr.FromContext(ctx)
 
-	var receiver v1beta1.Receiver
-	if err := r.Get(ctx, req.NamespacedName, &receiver); err != nil {
+	var obj v1beta1.Receiver
+	if err := r.Get(ctx, req.NamespacedName, &obj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// record suspension metrics
-	defer r.recordSuspension(ctx, receiver)
+	defer r.recordSuspension(ctx, obj)
 
-	token, err := r.token(ctx, receiver)
+	token, err := r.token(ctx, obj)
 	if err != nil {
-		receiver = v1beta1.ReceiverNotReady(receiver, v1beta1.TokenNotFoundReason, err.Error())
-		if err := r.patchStatus(ctx, req, receiver.Status); err != nil {
+		conditions.MarkFalse(&obj, meta.ReadyCondition, v1beta1.TokenNotFoundReason, err.Error())
+		if err := r.patchStatus(ctx, req, obj.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
 		return ctrl.Result{}, err
 	}
 
-	isReady := apimeta.IsStatusConditionTrue(receiver.Status.Conditions, meta.ReadyCondition)
-	receiverURL := fmt.Sprintf("/hook/%s", sha256sum(token+receiver.Name+receiver.Namespace))
-	if receiver.Status.URL == receiverURL && isReady && receiver.Status.ObservedGeneration == receiver.Generation {
+	isReady := apimeta.IsStatusConditionTrue(obj.Status.Conditions, meta.ReadyCondition)
+	receiverURL := fmt.Sprintf("/hook/%s", sha256sum(token+obj.Name+obj.Namespace))
+	if obj.Status.URL == receiverURL && isReady && obj.Status.ObservedGeneration == obj.Generation {
 		return ctrl.Result{}, nil
 	}
 
-	receiver = v1beta1.ReceiverReady(receiver,
-		v1beta1.InitializedReason,
-		"Receiver initialised with URL: "+receiverURL,
+	conditions.MarkTrue(&obj, meta.ReadyCondition, v1beta1.InitializedReason, "Receiver initialised with URL: "+receiverURL,
 		receiverURL)
-	receiver.Status.ObservedGeneration = receiver.Generation
-	if err := r.patchStatus(ctx, req, receiver.Status); err != nil {
+	obj.Status.ObservedGeneration = obj.Generation
+	if err := r.patchStatus(ctx, req, obj.Status); err != nil {
 		return ctrl.Result{Requeue: true}, err
 	}
 
