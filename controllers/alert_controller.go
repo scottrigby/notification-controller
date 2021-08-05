@@ -99,7 +99,23 @@ func (r *AlertReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *AlertReconciler) validate(ctx context.Context, alert v1beta1.Alert) error {
+func (r *AlertReconciler) reconcile(ctx context.Context, obj *v1beta1.Alert) (ctrl.Result, error) {
+	// Mark the resource as under reconciliation
+	conditions.MarkReconciling(obj, meta.ProgressingReason, "")
+
+	// validate alert spec and provider
+	if err := r.validate(ctx, obj); err != nil {
+		conditions.MarkFalse(obj, meta.ReadyCondition, meta.FailedReason, err.Error())
+		return ctrl.Result{Requeue: true}, err
+	}
+
+	conditions.MarkTrue(obj, meta.ReadyCondition, meta.SucceededReason, v1beta1.InitializedReason)
+	ctrl.LoggerFrom(ctx).Info("Alert initialised")
+
+	return ctrl.Result{}, nil
+}
+
+func (r *AlertReconciler) validate(ctx context.Context, alert *v1beta1.Alert) error {
 	var provider v1beta1.Provider
 	providerName := types.NamespacedName{Namespace: alert.Namespace, Name: alert.Spec.ProviderRef.Name}
 	if err := r.Get(ctx, providerName, &provider); err != nil {
