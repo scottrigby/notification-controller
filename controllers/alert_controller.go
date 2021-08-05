@@ -54,8 +54,8 @@ type AlertReconciler struct {
 func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	reconcileStart := time.Now()
 
-	var obj v1beta1.Alert
-	if err := r.Get(ctx, req.NamespacedName, &obj); err != nil {
+	obj := &v1beta1.Alert{}
+	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -64,7 +64,7 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (resu
 
 	// record reconciliation duration
 	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &obj)
+		objRef, err := reference.GetReference(r.Scheme, obj)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -72,13 +72,13 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (resu
 	}
 
 	// Initialize the patch helper
-	patchHelper, err := patch.NewHelper(&obj, r.Client)
+	patchHelper, err := patch.NewHelper(obj, r.Client)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	defer func() {
-		conditions.SetSummary(&obj, meta.ReadyCondition)
+		conditions.SetSummary(obj, meta.ReadyCondition)
 
 		// Patch the object, ignoring conflicts on the conditions owned by this controller
 		patchOpts := []patch.Option{
@@ -94,31 +94,31 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (resu
 		// Determine if the resource is still being reconciled, or if it has stalled, and record this observation
 		if retErr == nil && (result.IsZero() || !result.Requeue) {
 			// We are no longer reconciling
-			conditions.Delete(&obj, meta.ReconcilingCondition)
+			conditions.Delete(obj, meta.ReconcilingCondition)
 
 			// We have now observed this generation
 			patchOpts = append(patchOpts, patch.WithStatusObservedGeneration{})
 
-			readyCondition := conditions.Get(&obj, meta.ReadyCondition)
+			readyCondition := conditions.Get(obj, meta.ReadyCondition)
 			switch readyCondition.Status {
 			case metav1.ConditionFalse:
 				// As we are no longer reconciling and the end-state is not ready, the reconciliation has stalled
-				conditions.MarkStalled(&obj, readyCondition.Reason, readyCondition.Message)
+				conditions.MarkStalled(obj, readyCondition.Reason, readyCondition.Message)
 			case metav1.ConditionTrue:
 				// As we are no longer reconciling and the end-state is ready, the reconciliation is no longer stalled
-				conditions.Delete(&obj, meta.StalledCondition)
+				conditions.Delete(obj, meta.StalledCondition)
 			}
 		}
 
 		// Finally, patch the resource
-		if err := patchHelper.Patch(ctx, &obj, patchOpts...); err != nil {
+		if err := patchHelper.Patch(ctx, obj, patchOpts...); err != nil {
 			retErr = errors.NewAggregate([]error{retErr, err})
 		}
 
-		r.recordReadiness(ctx, obj)
+		// r.recordReadiness(ctx, obj)
 	}()
 
-	return r.reconcile(ctx, &obj)
+	return r.reconcile(ctx, obj)
 }
 
 func (r *AlertReconciler) SetupWithManager(mgr ctrl.Manager) error {
