@@ -147,7 +147,7 @@ func (r *AlertReconciler) validate(ctx context.Context, alert *v1beta1.Alert) er
 		return fmt.Errorf("failed to get provider %s, error: %w", providerName.String(), err)
 	}
 
-	if !conditions.IsReady(&provider, meta.ReadyCondition) {
+	if !conditions.IsReady(&provider) {
 		return fmt.Errorf("provider %s is not ready", providerName.String())
 	}
 

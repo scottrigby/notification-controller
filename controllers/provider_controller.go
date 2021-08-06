@@ -79,7 +79,7 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{Requeue: true}, err
 	}
 
-	if !apimeta.IsStatusConditionTrue(provider.Status.Conditions, meta.ReadyCondition) {
+	if !conditions.IsReady(&provider) {
 		conditions.MarkTrue(&provider, meta.ReadyCondition, meta.SucceededReason, v1beta1.InitializedReason)
 		if err := r.patchStatus(ctx, req, provider.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err

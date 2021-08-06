@@ -26,7 +26,6 @@ import (
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -77,7 +76,7 @@ func (r *ReceiverReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	isReady := apimeta.IsStatusConditionTrue(obj.Status.Conditions, meta.ReadyCondition)
+	isReady := conditions.IsReady(&obj)
 	receiverURL := fmt.Sprintf("/hook/%s", sha256sum(token+obj.Name+obj.Namespace))
 	if obj.Status.URL == receiverURL && isReady && obj.Status.ObservedGeneration == obj.Generation {
 		return ctrl.Result{}, nil
