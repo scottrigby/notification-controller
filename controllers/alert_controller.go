@@ -131,7 +131,7 @@ func (r *AlertReconciler) reconcile(ctx context.Context, obj *v1beta1.Alert) (ct
 	// validate alert spec and provider
 	if err := r.validate(ctx, obj); err != nil {
 		conditions.MarkFalse(obj, meta.ReadyCondition, meta.FailedReason, err.Error())
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{}, err
 	}
 
 	conditions.MarkTrue(obj, meta.ReadyCondition, meta.SucceededReason, v1beta1.InitializedReason)
