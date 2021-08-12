@@ -61,6 +61,11 @@ type ProviderSpec struct {
 	// a PEM-encoded CA certificate (`caFile`)
 	// +optional
 	CertSecretRef *meta.LocalObjectReference `json:"certSecretRef,omitempty"`
+
+	// This flag tells the controller to suspend subsequent events handling.
+	// Defaults to false.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 const (
@@ -102,8 +107,8 @@ type Provider struct {
 	Status ProviderStatus `json:"status,omitempty"`
 }
 
-// GetConditions returns the status conditions of the object
-func (in Provider) GetConditions() []metav1.Condition {
+// GetConditions returns a pointer to the Status.Conditions slice
+func (in *Provider) GetConditions() []metav1.Condition {
 	return in.Status.Conditions
 }
 

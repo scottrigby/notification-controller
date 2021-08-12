@@ -123,9 +123,9 @@ func main() {
 	metricsH := helper.MustMakeMetrics(mgr)
 
 	if err = (&controllers.ProviderReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		MetricsRecorder: metricsRecorder,
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Metrics: metricsH,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Provider")
 		os.Exit(1)
