@@ -27,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -53,10 +54,16 @@ type AlertReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-var ProviderIndexKey = ".metadata.provider"
+type AlertReconcilerOptions struct {
+	MaxConcurrentReconciles int
+}
 
 func (r *AlertReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &v1beta1.Alert{}, ProviderIndexKey,
+	return r.SetupWithManagerAndOptions(mgr, AlertReconcilerOptions{})
+}
+
+func (r *AlertReconciler) SetupWithManagerAndOptions(mgr ctrl.Manager, opts AlertReconcilerOptions) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &v1beta1.Alert{}, v1beta1.ProviderIndexKey,
 		func(o client.Object) []string {
 			alert := o.(*v1beta1.Alert)
 			return []string{
@@ -76,6 +83,7 @@ func (r *AlertReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.requestsForProviderChange),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
+		WithOptions(controller.Options{MaxConcurrentReconciles: opts.MaxConcurrentReconciles}).
 		Complete(r)
 }
 
@@ -186,7 +194,7 @@ func (r *AlertReconciler) requestsForProviderChange(o client.Object) []reconcile
 	ctx := context.Background()
 	var list v1beta1.AlertList
 	if err := r.List(ctx, &list, client.MatchingFields{
-		ProviderIndexKey: client.ObjectKeyFromObject(provider).String(),
+		v1beta1.ProviderIndexKey: client.ObjectKeyFromObject(provider).String(),
 	}); err != nil {
 		return nil
 	}
@@ -195,5 +203,6 @@ func (r *AlertReconciler) requestsForProviderChange(o client.Object) []reconcile
 	for _, i := range list.Items {
 		reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&i)})
 	}
+
 	return reqs
 }
