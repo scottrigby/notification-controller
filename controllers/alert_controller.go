@@ -25,8 +25,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
@@ -38,6 +42,9 @@ import (
 	"github.com/fluxcd/notification-controller/api/v1beta1"
 )
 
+// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts/status,verbs=get;update;patch
+
 // AlertReconciler reconciles a Alert object
 type AlertReconciler struct {
 	client.Client
@@ -46,8 +53,31 @@ type AlertReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=alerts/status,verbs=get;update;patch
+var ProviderIndexKey = ".metadata.provider"
+
+func (r *AlertReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &v1beta1.Alert{}, ProviderIndexKey,
+		func(o client.Object) []string {
+			alert := o.(*v1beta1.Alert)
+			return []string{
+				// we include namespace here as it clarifies object retrieval later
+				fmt.Sprintf("%s/%s", alert.GetNamespace(), alert.Spec.ProviderRef.Name),
+			}
+		},
+	); err != nil {
+		return err
+	}
+
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1beta1.Alert{}).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
+		Watches(
+			&source.Kind{Type: &v1beta1.Provider{}},
+			handler.EnqueueRequestsFromMapFunc(r.requestsForProviderChange),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
+		).
+		Complete(r)
+}
 
 func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	start := time.Now()
@@ -117,13 +147,6 @@ func (r *AlertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (resu
 	return r.reconcile(ctx, obj)
 }
 
-func (r *AlertReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1beta1.Alert{}).
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
-		Complete(r)
-}
-
 func (r *AlertReconciler) reconcile(ctx context.Context, obj *v1beta1.Alert) (ctrl.Result, error) {
 	// Mark the resource as under reconciliation
 	conditions.MarkReconciling(obj, meta.ProgressingReason, "")
@@ -152,4 +175,25 @@ func (r *AlertReconciler) validate(ctx context.Context, alert *v1beta1.Alert) er
 	}
 
 	return nil
+}
+
+func (r *AlertReconciler) requestsForProviderChange(o client.Object) []reconcile.Request {
+	provider, ok := o.(*v1beta1.Provider)
+	if !ok {
+		panic(fmt.Sprintf("Expected a provider, got %T", o))
+	}
+
+	ctx := context.Background()
+	var list v1beta1.AlertList
+	if err := r.List(ctx, &list, client.MatchingFields{
+		ProviderIndexKey: client.ObjectKeyFromObject(provider).String(),
+	}); err != nil {
+		return nil
+	}
+
+	var reqs []reconcile.Request
+	for _, i := range list.Items {
+		reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&i)})
+	}
+	return reqs
 }
