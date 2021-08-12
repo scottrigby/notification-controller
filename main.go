@@ -139,9 +139,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.ReceiverReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		MetricsRecorder: metricsRecorder,
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Metrics: metricsH,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Receiver")
 		os.Exit(1)
