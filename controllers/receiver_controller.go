@@ -24,7 +24,6 @@ import (
 	"k8s.io/client-go/tools/reference"
 
 	"github.com/fluxcd/pkg/runtime/conditions"
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -57,7 +56,7 @@ type ReceiverReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *ReceiverReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logr.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
 	var obj v1beta1.Receiver
 	if err := r.Get(ctx, req.NamespacedName, &obj); err != nil {
@@ -127,7 +126,7 @@ func (r *ReceiverReconciler) recordSuspension(ctx context.Context, rcvr v1beta1.
 	if r.MetricsRecorder == nil {
 		return
 	}
-	log := logr.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
 	objRef, err := reference.GetReference(r.Scheme, &rcvr)
 	if err != nil {
