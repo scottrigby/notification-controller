@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	ProviderKind string = "Provider"
+	ProviderKind     string = "Provider"
+	ProviderIndexKey string = ".metadata.provider"
 )
 
 // ProviderSpec defines the desired state of Provider
@@ -61,6 +62,11 @@ type ProviderSpec struct {
 	// a PEM-encoded CA certificate (`caFile`)
 	// +optional
 	CertSecretRef *meta.LocalObjectReference `json:"certSecretRef,omitempty"`
+
+	// This flag tells the controller to suspend subsequent events handling.
+	// Defaults to false.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 const (
@@ -102,9 +108,14 @@ type Provider struct {
 	Status ProviderStatus `json:"status,omitempty"`
 }
 
-// GetStatusConditions returns a pointer to the Status.Conditions slice
-func (in *Provider) GetStatusConditions() *[]metav1.Condition {
-	return &in.Status.Conditions
+// GetConditions returns a pointer to the Status.Conditions slice
+func (in *Provider) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
+}
+
+// SetConditions sets the status conditions on the object
+func (in *Provider) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true
