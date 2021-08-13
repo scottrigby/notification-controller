@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -41,6 +42,9 @@ import (
 	"github.com/fluxcd/notification-controller/internal/notifier"
 )
 
+// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=providers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=providers/status,verbs=get;update;patch
+
 // ProviderReconciler reconciles a Provider object
 type ProviderReconciler struct {
 	client.Client
@@ -48,8 +52,21 @@ type ProviderReconciler struct {
 	helper.Metrics
 }
 
-// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=providers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=providers/status,verbs=get;update;patch
+type ProviderReconcilerOptions struct {
+	MaxConcurrentReconciles int
+}
+
+func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return r.SetupWithManagerAndOptions(mgr, ProviderReconcilerOptions{})
+}
+
+func (r *ProviderReconciler) SetupWithManagerAndOptions(mgr ctrl.Manager, opts ProviderReconcilerOptions) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1beta1.Provider{}).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
+		WithOptions(controller.Options{MaxConcurrentReconciles: opts.MaxConcurrentReconciles}).
+		Complete(r)
+}
 
 func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	start := time.Now()
@@ -116,13 +133,6 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}()
 
 	return r.reconcile(ctx, obj)
-}
-
-func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1beta1.Provider{}).
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
-		Complete(r)
 }
 
 func (r *ProviderReconciler) reconcile(ctx context.Context, obj *v1beta1.Provider) (ctrl.Result, error) {

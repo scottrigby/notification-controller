@@ -32,19 +32,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/fluxcd/pkg/apis/meta"
 
 	"github.com/fluxcd/notification-controller/api/v1beta1"
 )
-
-// ReceiverReconciler reconciles a Receiver object
-type ReceiverReconciler struct {
-	client.Client
-	helper.Metrics
-
-	Scheme *runtime.Scheme
-}
 
 // +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=receivers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=notification.toolkit.fluxcd.io,resources=receivers/status,verbs=get;update;patch
@@ -57,6 +50,29 @@ type ReceiverReconciler struct {
 // +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
+// ReceiverReconciler reconciles a Receiver object
+type ReceiverReconciler struct {
+	client.Client
+	helper.Metrics
+
+	Scheme *runtime.Scheme
+}
+
+type ReceiverReconcilerOptions struct {
+	MaxConcurrentReconciles int
+}
+
+func (r *ReceiverReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return r.SetupWithManagerAndOptions(mgr, ReceiverReconcilerOptions{})
+}
+
+func (r *ReceiverReconciler) SetupWithManagerAndOptions(mgr ctrl.Manager, opts ReceiverReconcilerOptions) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1beta1.Receiver{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: opts.MaxConcurrentReconciles}).
+		Complete(r)
+}
 
 func (r *ReceiverReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	start := time.Now()
@@ -124,12 +140,6 @@ func (r *ReceiverReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}()
 
 	return ctrl.Result{}, nil
-}
-
-func (r *ReceiverReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1beta1.Receiver{}).
-		Complete(r)
 }
 
 /// reconcile steps through the actual reconciliation tasks for the object, it returns early on the first step that
